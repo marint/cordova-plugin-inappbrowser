@@ -603,12 +603,12 @@ public class InAppBrowser extends CordovaPlugin {
 
                 // Back button
                 back = new Button(cordova.getActivity());
-                RelativeLayout.LayoutParams backLayoutParams = new RelativeLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT);
+                RelativeLayout.LayoutParams backLayoutParams = new RelativeLayout.LayoutParams(this.dpToPixels(44), LayoutParams.MATCH_PARENT);
                 backLayoutParams.addRule(RelativeLayout.ALIGN_LEFT);
                 backLayoutParams.setMargins(0, 0, this.dpToPixels(8), 0);
                 back.setLayoutParams(backLayoutParams);
-                back.setContentDescription("Back Button");
-                back.setId(2);
+                back.setContentDescription("Back");
+                back.setId(Integer.valueOf(2));
                 //back.setPadding(this.dpToPixels(20), 0, 0, 0);
                 //back.getBackground().setColorFilter(Color.GRAY, android.graphics.PorterDuff.Mode.MULTIPLY);
 
@@ -632,12 +632,12 @@ public class InAppBrowser extends CordovaPlugin {
 
                 // Forward button
                 forward = new Button(cordova.getActivity());
-                RelativeLayout.LayoutParams forwardLayoutParams = new RelativeLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT);
+                RelativeLayout.LayoutParams forwardLayoutParams = new RelativeLayout.LayoutParams(this.dpToPixels(44), LayoutParams.MATCH_PARENT);
                 forwardLayoutParams.addRule(RelativeLayout.RIGHT_OF, 2);
                 forwardLayoutParams.setMargins(this.dpToPixels(8), 0, 0, 0);
                 forward.setLayoutParams(forwardLayoutParams);
-                forward.setContentDescription("Forward Button");
-                forward.setId(3);
+                forward.setContentDescription("Forward");
+                forward.setId(Integer.valueOf(3));
                 forward.setPadding(0, 0, this.dpToPixels(20), 0);
                 int fwdResId = activityRes.getIdentifier("ic_action_next_item", "drawable", cordova.getActivity().getPackageName());
                 Drawable fwdIcon = activityRes.getDrawable(fwdResId);
@@ -681,11 +681,11 @@ public class InAppBrowser extends CordovaPlugin {
 
                 // Close/Done button
                 Button close = new Button(cordova.getActivity());
-                RelativeLayout.LayoutParams closeLayoutParams = new RelativeLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT);
+                RelativeLayout.LayoutParams closeLayoutParams = new RelativeLayout.LayoutParams(this.dpToPixels(70), LayoutParams.MATCH_PARENT);
                 closeLayoutParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
                 close.setLayoutParams(closeLayoutParams);
-                close.setContentDescription("Close Button");
-                close.setId(5);
+                close.setContentDescription("Close");
+                close.setId(Integer.valueOf(5));
                 if (closeButtonCaption != null) {
                     close.setText(closeButtonCaption);
                     close.setTextColor(Color.parseColor("#007aff"));
