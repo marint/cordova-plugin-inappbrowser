@@ -73,6 +73,27 @@ import java.util.StringTokenizer;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 
+
+import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.Manifest;
+import android.net.Uri;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.util.Log;
+import android.webkit.ValueCallback;
+
+import java.io.File;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+
+
 @SuppressLint("SetJavaScriptEnabled")
 public class InAppBrowser extends CordovaPlugin {
 
@@ -110,10 +131,7 @@ public class InAppBrowser extends CordovaPlugin {
     private boolean hadwareBackButton = true;
     private boolean mediaPlaybackRequiresUserGesture = false;
 
-    private ValueCallback<Uri> mUploadCallback;
-    private ValueCallback<Uri[]> mUploadCallbackLollipop;
-    private final static int FILECHOOSER_REQUESTCODE = 1;
-    private final static int FILECHOOSER_REQUESTCODE_LOLLIPOP = 2;
+    private XWalkFileChooser mFileChooser;
 
     /**
      * Executes the request and returns PluginResult.
@@ -727,38 +745,41 @@ public class InAppBrowser extends CordovaPlugin {
 
                 inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView) {
                     // For Android 5.0+
-                    public boolean onShowFileChooser (WebView webView, ValueCallback<Uri[]> filePathCallback, WebChromeClient.FileChooserParams fileChooserParams)
-                    {
+                    public boolean onShowFileChooser (WebView webView, ValueCallback<Uri[]> filePathCallback, WebChromeClient.FileChooserParams fileChooserParams) {
                         LOG.d(LOG_TAG, "File Chooser 5.0+");
-                        // If callback exists, finish it.
-                        if(mUploadCallbackLollipop != null) {
-                            mUploadCallbackLollipop.onReceiveValue(null);
+                        if (mFileChooser == null) {
+                            mFileChooser = new XWalkFileChooser(cordova.getActivity());
                         }
-                        mUploadCallbackLollipop = filePathCallback;
-                        // Create File Chooser Intent
-                        Intent content = new Intent(Intent.ACTION_GET_CONTENT);
-                        content.addCategory(Intent.CATEGORY_OPENABLE);
-                        content.setType("*/*");
-                        // Run cordova startActivityForResult
-                        cordova.startActivityForResult(InAppBrowser.this, Intent.createChooser(content, "Select File"), FILECHOOSER_REQUESTCODE_LOLLIPOP);
+                        String acceptTypes = "";
+                        String[] array = fileChooserParams.getAcceptTypes();
+                        if (array != null && array.length > 0) {
+                            for (int i = 0; i < array.length; i++) {
+                                if (i > 0) {
+                                    acceptTypes += ",";
+                                }
+                                acceptTypes += array[i];
+                            }
+                        } else {
+                            acceptTypes = "*/*";
+                        }
+                        mFileChooser.showFileChooser(null, filePathCallback, acceptTypes, "" + fileChooserParams.isCaptureEnabled());
                         return true;
                     }
                     // For Android 4.1+
-                    public void openFileChooser(ValueCallback<Uri> uploadMsg, String acceptType, String capture)
-                    {
+                    public void openFileChooser(ValueCallback<Uri> uploadMsg, String acceptType, String capture) {
                         LOG.d(LOG_TAG, "File Chooser 4.1+");
-                        // Call file chooser for Android 3.0+
-                        openFileChooser(uploadMsg, acceptType);
+                        if (mFileChooser == null) {
+                            mFileChooser = new XWalkFileChooser(cordova.getActivity());
+                        }
+                        mFileChooser.showFileChooser(uploadMsg, null, acceptType, capture);
                     }
                     // For Android 3.0+
-                    public void openFileChooser(ValueCallback<Uri> uploadMsg, String acceptType)
-                    {
+                    public void openFileChooser(ValueCallback<Uri> uploadMsg, String acceptType) {
                         LOG.d(LOG_TAG, "File Chooser 3.0+");
-                        mUploadCallback = uploadMsg;
-                        Intent content = new Intent(Intent.ACTION_GET_CONTENT);
-                        content.addCategory(Intent.CATEGORY_OPENABLE);
-                        // run startActivityForResult
-                        cordova.startActivityForResult(InAppBrowser.this, Intent.createChooser(content, "Select File"), FILECHOOSER_REQUESTCODE);
+                        if (mFileChooser == null) {
+                            mFileChooser = new XWalkFileChooser(cordova.getActivity());
+                        }
+                        mFileChooser.showFileChooser(uploadMsg, null, acceptType, "");
                     }
                 });
 
@@ -776,7 +797,7 @@ public class InAppBrowser extends CordovaPlugin {
 
                 String overrideUserAgent = preferences.getString("OverrideUserAgent", null);
                 String appendUserAgent = preferences.getString("AppendUserAgent", null);
-                
+
                 if (overrideUserAgent != null) {
                     settings.setUserAgentString(overrideUserAgent);
                 }
@@ -852,29 +873,9 @@ public class InAppBrowser extends CordovaPlugin {
      * @param intent the data from android file chooser
      */
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
-        // For Android >= 5.0
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            LOG.d(LOG_TAG, "onActivityResult (For Android >= 5.0)");
-            // If RequestCode or Callback is Invalid
-            if(requestCode != FILECHOOSER_REQUESTCODE_LOLLIPOP || mUploadCallbackLollipop == null) {
-                super.onActivityResult(requestCode, resultCode, intent);
-                return;
-            }
-            mUploadCallbackLollipop.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, intent));
-            mUploadCallbackLollipop = null;
-        }
-        // For Android < 5.0
-        else {
-            LOG.d(LOG_TAG, "onActivityResult (For Android < 5.0)");
-            // If RequestCode or Callback is Invalid
-            if(requestCode != FILECHOOSER_REQUESTCODE || mUploadCallback == null) {
-                super.onActivityResult(requestCode, resultCode, intent);
-                return;
-            }
-            if (null == mUploadCallback) return;
-            Uri result = intent == null || resultCode != cordova.getActivity().RESULT_OK ? null : intent.getData();
-            mUploadCallback.onReceiveValue(result);
-            mUploadCallback = null;
+        LOG.d(LOG_TAG, "onActivityResult: " + requestCode + " / " + resultCode);
+        if (mFileChooser != null) {
+            mFileChooser.onActivityResult(requestCode, resultCode, intent);
         }
     }
 
@@ -1103,4 +1104,185 @@ public class InAppBrowser extends CordovaPlugin {
             super.onReceivedHttpAuthRequest(view, handler, host, realm);
         }
     }
+
+
+    // Copyright (c) 2016 Intel Corporation. All rights reserved.
+    // Use of this source code is governed by a BSD-style license that can be
+    // found in the LICENSE file.
+    public class XWalkFileChooser {
+        private static final String IMAGE_TYPE = "image/";
+        private static final String VIDEO_TYPE = "video/";
+        private static final String AUDIO_TYPE = "audio/";
+        private static final String ALL_IMAGE_TYPES = IMAGE_TYPE + "*";
+        private static final String ALL_VIDEO_TYPES = VIDEO_TYPE + "*";
+        private static final String ALL_AUDIO_TYPES = AUDIO_TYPE + "*";
+        private static final String ANY_TYPES = "*/*";
+        private static final String SPLIT_EXPRESSION = ",";
+        private static final String PATH_PREFIX = "file:";
+        private static final String WRITE_EXTERNAL_STORAGE= "android.permission.WRITE_EXTERNAL_STORAGE";
+
+        public static final int INPUT_FILE_REQUEST_CODE = 1;
+
+        private static final String TAG = "XWalkFileChooser";
+
+        private Activity mActivity;
+        private ValueCallback<Uri> mFilePathCallback;
+        private ValueCallback<Uri[]> mFilePathCallback5;
+        private String mCameraPhotoPath;
+
+        public XWalkFileChooser(Activity activity) {
+            mActivity = activity;
+        }
+
+        public boolean showFileChooser(ValueCallback<Uri> uploadFile, ValueCallback<Uri[]> uploadFile5, String acceptType, String capture) {
+            mFilePathCallback = uploadFile;
+            mFilePathCallback5 = uploadFile5;
+
+            Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            if (takePictureIntent.resolveActivity(mActivity.getPackageManager()) != null) {
+                // Create the File where the photo should go
+                File photoFile = createImageFile();
+                // Continue only if the File was successfully created
+                if (photoFile != null) {
+                    mCameraPhotoPath = PATH_PREFIX + photoFile.getAbsolutePath();
+                    takePictureIntent.putExtra("PhotoPath", mCameraPhotoPath);
+                    takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(photoFile));
+                } else {
+                    takePictureIntent = null;
+                }
+            }
+
+            if ("true".equals(capture) || (acceptType != null && acceptType.toLowerCase().startsWith("image/") && !acceptType.contains(","))) {
+                cordova.startActivityForResult(InAppBrowser.this, takePictureIntent, INPUT_FILE_REQUEST_CODE);
+                Log.d(TAG, "Started camera");
+            } else {
+                Intent camcorder = new Intent(MediaStore.ACTION_VIDEO_CAPTURE);
+                Intent soundRecorder = new Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION);
+
+                if (acceptType != null && acceptType.toLowerCase().startsWith("video/") && !acceptType.contains(",")) {
+                    cordova.startActivityForResult(InAppBrowser.this, camcorder, INPUT_FILE_REQUEST_CODE);
+                    Log.d(TAG, "Started video capture");
+                } else if (acceptType != null && acceptType.toLowerCase().startsWith("audio/") && !acceptType.contains(",")) {
+                    cordova.startActivityForResult(InAppBrowser.this, soundRecorder, INPUT_FILE_REQUEST_CODE);
+                    Log.d(TAG, "Started audio recorder");
+                } else {
+                    Intent contentSelectionIntent = new Intent(Intent.ACTION_GET_CONTENT);
+                    contentSelectionIntent.addCategory(Intent.CATEGORY_OPENABLE);
+                    ArrayList<Intent> extraIntents = new ArrayList<Intent>();
+                    if (canWriteExternalStorage()) {
+                        if (takePictureIntent != null) {
+                            extraIntents.add(takePictureIntent);
+                        }
+                        extraIntents.add(camcorder);
+                        extraIntents.add(soundRecorder);
+                        contentSelectionIntent.setType(ANY_TYPES);
+                    }
+
+                    Intent chooserIntent = new Intent(Intent.ACTION_CHOOSER);
+                    chooserIntent.putExtra(Intent.EXTRA_INTENT, contentSelectionIntent);
+                    if (!extraIntents.isEmpty()) {
+                        chooserIntent.putExtra(Intent.EXTRA_INITIAL_INTENTS, extraIntents.toArray(new Intent[]{}));
+                    }
+                    cordova.startActivityForResult(InAppBrowser.this, chooserIntent, INPUT_FILE_REQUEST_CODE);
+                    Log.d(TAG, "Started chooser");
+                }
+            }
+
+            return true;
+        }
+
+        public void onActivityResult(int requestCode, int resultCode, Intent data) {
+            if(requestCode == INPUT_FILE_REQUEST_CODE && (mFilePathCallback != null || mFilePathCallback5 != null)) {
+                Log.d(TAG, "Activity result: " + resultCode);
+                Uri results = null;
+
+                // Check that the response is a good one
+                if(Activity.RESULT_OK == resultCode) {
+                    // In Android M, camera results return an empty Intent rather than null.
+                    if(data == null || (data.getAction() == null && data.getData() == null)) {
+                        // If there is not data, then we may have taken a photo
+                        if(mCameraPhotoPath != null) {
+                            results = Uri.parse(mCameraPhotoPath);
+                        }
+                    } else {
+                        String dataString = data.getDataString();
+                        if (dataString != null) {
+                            results = Uri.parse(dataString);
+                        }
+                        deleteImageFile();
+                    }
+                } else if (Activity.RESULT_CANCELED == resultCode) {
+                    deleteImageFile();
+                }
+
+                if (results != null) {
+                    Log.d(TAG, "Received file: " + results.toString());
+                }
+                // lollipop
+                if (mFilePathCallback5 != null) {
+                    if (results == null) {
+                        mFilePathCallback5.onReceiveValue(null);
+                    } else {
+                        mFilePathCallback5.onReceiveValue(new Uri[]{results});
+                    }
+                    mFilePathCallback5 = null;
+                } else {
+                    mFilePathCallback.onReceiveValue(results);
+                    mFilePathCallback = null;
+                }
+            }
+        }
+
+        private boolean canWriteExternalStorage() {
+            try {
+                PackageManager packageManager = mActivity.getPackageManager();
+                PackageInfo packageInfo = packageManager.getPackageInfo(
+                        mActivity.getPackageName(), PackageManager.GET_PERMISSIONS);
+                return Arrays.asList(packageInfo.requestedPermissions).contains(WRITE_EXTERNAL_STORAGE);
+            } catch (NameNotFoundException e) {
+                return false;
+            } catch (NullPointerException e) {
+                return false;
+            }
+        }
+
+        private File createImageFile() {
+            String state = Environment.getExternalStorageState();
+            if (!state.equals(Environment.MEDIA_MOUNTED)) {
+                Log.e(TAG, "External storage is not mounted.");
+                return null;
+            }
+
+            // Create an image file name
+            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            String imageFileName = "JPEG_" + timeStamp + "_";
+            File storageDir = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_PICTURES);
+            if (!storageDir.exists()) {
+                storageDir.mkdirs();
+            }
+
+            try {
+                File file = File.createTempFile(imageFileName, ".jpg", storageDir);
+                Log.d(TAG, "Created image file: " +  file.getAbsolutePath());
+                return file;
+            } catch (IOException e) {
+                // Error occurred while creating the File
+                Log.e(TAG, "Unable to create Image File, " +
+                        "please make sure permission 'WRITE_EXTERNAL_STORAGE' was added.");
+                return null;
+            }
+        }
+
+        private boolean deleteImageFile() {
+            if (mCameraPhotoPath == null || !mCameraPhotoPath.contains(PATH_PREFIX)) {
+                return false;
+            }
+            String filePath = mCameraPhotoPath.split(PATH_PREFIX)[1];
+            boolean result = new File(filePath).delete();
+            Log.d(TAG, "Delete image file: " + filePath + " result: " + result);
+            return result;
+        }
+    }
+
 }
