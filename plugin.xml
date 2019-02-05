@@ -44,6 +44,11 @@
                 <param name="android-package" value="org.apache.cordova.inappbrowser.InAppBrowser"/>
             </feature>
         </config-file>
+        <config-file target="AndroidManifest.xml" parent="/manifest/application">
+            <provider android:name="android.support.v4.content.FileProvider" android:authorities="org.apache.cordova.inappbrowser.fileprovider" android:exported="false" android:grantUriPermissions="true">
+                <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"></meta-data>
+            </provider>
+        </config-file>
 
         <source-file src="src/android/InAppBrowser.java" target-dir="src/org/apache/cordova/inappbrowser" />
         <source-file src="src/android/InAppBrowserDialog.java" target-dir="src/org/apache/cordova/inappbrowser" />
@@ -64,6 +69,7 @@
         <resource-file src="src/android/res/drawable-mdpi/ic_action_remove.png" target="res/drawable-mdpi/ic_action_remove.png" />
         <resource-file src="src/android/res/drawable-xhdpi/ic_action_remove.png" target="res/drawable-xhdpi/ic_action_remove.png" />
         <resource-file src="src/android/res/drawable-xxhdpi/ic_action_remove.png" target="res/drawable-xxhdpi/ic_action_remove.png" />
+        <source-file src="src/android/res/xml/file_paths.xml" target-dir="res/xml" />
 
     </platform>
 

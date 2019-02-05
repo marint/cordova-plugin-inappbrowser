@@ -52,6 +52,8 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 
+import org.apache.cordova.PermissionHelper;
+
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.Config;
 import org.apache.cordova.CordovaArgs;
@@ -130,6 +132,8 @@ public class InAppBrowser extends CordovaPlugin {
     private boolean clearSessionCache = false;
     private boolean hadwareBackButton = true;
     private boolean mediaPlaybackRequiresUserGesture = false;
+
+    private String[] permissions = { Manifest.permission.CAMERA };
 
     private XWalkFileChooser mFileChooser;
 
@@ -762,8 +766,14 @@ public class InAppBrowser extends CordovaPlugin {
                         } else {
                             acceptTypes = "*/*";
                         }
-                        mFileChooser.showFileChooser(null, filePathCallback, acceptTypes, "" + fileChooserParams.isCaptureEnabled());
-                        return true;
+                        String capture = "" + fileChooserParams.isCaptureEnabled();
+                        if (("true".equals(capture) || acceptTypes.startsWith("image/")) && !hasPermissions()) {
+                            requestPermissions(0);
+                            return false;
+                        } else {
+                            mFileChooser.showFileChooser(null, filePathCallback, acceptTypes, capture);
+                            return true;
+                        }
                     }
                     // For Android 4.1+
                     public void openFileChooser(ValueCallback<Uri> uploadMsg, String acceptType, String capture) {
@@ -1012,7 +1022,7 @@ public class InAppBrowser extends CordovaPlugin {
             // Update the UI if we haven't already
             if (!newloc.equals(edittext.getText().toString())) {
                 edittext.setText(newloc);
-             }
+            }
 
             try {
                 JSONObject obj = new JSONObject();
@@ -1106,6 +1116,23 @@ public class InAppBrowser extends CordovaPlugin {
     }
 
 
+    /**
+     * check application's permissions
+     */
+    public boolean hasPermissions() {
+        for (String p : permissions) {
+            if (!PermissionHelper.hasPermission(this, p)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public void requestPermissions(int requestCode) {
+        PermissionHelper.requestPermissions(this, requestCode, permissions);
+    }
+
+
     // Copyright (c) 2016 Intel Corporation. All rights reserved.
     // Use of this source code is governed by a BSD-style license that can be
     // found in the LICENSE file.
@@ -1145,16 +1172,25 @@ public class InAppBrowser extends CordovaPlugin {
                 // Continue only if the File was successfully created
                 if (photoFile != null) {
                     mCameraPhotoPath = PATH_PREFIX + photoFile.getAbsolutePath();
+
+                    //takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(photoFile));
+                    Uri photoURI = android.support.v4.content.FileProvider.getUriForFile(cordova.getActivity().getApplicationContext(),
+                            "org.apache.cordova.inappbrowser.fileprovider", photoFile);
+                    takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
+
                     takePictureIntent.putExtra("PhotoPath", mCameraPhotoPath);
-                    takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(photoFile));
+
+                    //takePictureIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 } else {
                     takePictureIntent = null;
                 }
             }
 
-            if ("true".equals(capture) || (acceptType != null && acceptType.toLowerCase().startsWith("image/") && !acceptType.contains(","))) {
-                cordova.startActivityForResult(InAppBrowser.this, takePictureIntent, INPUT_FILE_REQUEST_CODE);
-                Log.d(TAG, "Started camera");
+            if (takePictureIntent != null && ("true".equals(capture) || (acceptType != null && acceptType.toLowerCase().startsWith("image/") && !acceptType.contains(",")))) {
+                if (hasPermissions()) {
+                    cordova.startActivityForResult(InAppBrowser.this, takePictureIntent, INPUT_FILE_REQUEST_CODE);
+                    Log.d(TAG, "Started camera");
+                }
             } else {
                 Intent camcorder = new Intent(MediaStore.ACTION_VIDEO_CAPTURE);
                 Intent soundRecorder = new Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION);
@@ -1253,14 +1289,15 @@ public class InAppBrowser extends CordovaPlugin {
                 return null;
             }
 
-            // Create an image file name
-            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-            String imageFileName = "JPEG_" + timeStamp + "_";
-            File storageDir = Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_PICTURES);
+            //File storageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+            File storageDir = cordova.getActivity().getApplicationContext().getExternalFilesDir(Environment.DIRECTORY_PICTURES);
             if (!storageDir.exists()) {
                 storageDir.mkdirs();
             }
+
+            // Create an image file name
+            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            String imageFileName = "JPEG_" + timeStamp + "_";
 
             try {
                 File file = File.createTempFile(imageFileName, ".jpg", storageDir);
@@ -1268,6 +1305,7 @@ public class InAppBrowser extends CordovaPlugin {
                 return file;
             } catch (IOException e) {
                 // Error occurred while creating the File
+                e.printStackTrace();
                 Log.e(TAG, "Unable to create Image File, " +
                         "please make sure permission 'WRITE_EXTERNAL_STORAGE' was added.");
                 return null;
