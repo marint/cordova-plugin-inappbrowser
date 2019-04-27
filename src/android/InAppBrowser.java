@@ -767,7 +767,7 @@ public class InAppBrowser extends CordovaPlugin {
                             acceptTypes = "*/*";
                         }
                         String capture = "" + fileChooserParams.isCaptureEnabled();
-                        if (("true".equals(capture) || acceptTypes.startsWith("image/")) && !hasPermissions()) {
+                        if (!hasPermissions()) {
                             requestPermissions(0);
                             return false;
                         } else {
