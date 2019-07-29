@@ -1175,7 +1175,7 @@ public class InAppBrowser extends CordovaPlugin {
 
                     //takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(photoFile));
                     Uri photoURI = android.support.v4.content.FileProvider.getUriForFile(cordova.getActivity().getApplicationContext(),
-                            "org.apache.cordova.inappbrowser.fileprovider", photoFile);
+                            cordova.getActivity().getApplicationContext().getPackageName() + ".inappbrowser.fileprovider", photoFile);
                     takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
 
                     takePictureIntent.putExtra("PhotoPath", mCameraPhotoPath);
